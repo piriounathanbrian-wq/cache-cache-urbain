@@ -6,32 +6,122 @@
     <title>Cache-Cache Urbain GPS</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        body, html { margin: 0; padding: 0; height: 100%; font-family: Arial, sans-serif; background: #121212; color: #fff; }
-        #map { height: 70vh; width: 100%; }
-        #ui { padding: 15px; text-align: center; background: #1e1e1e; height: 30vh; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-around; }
-        input { padding: 10px; font-size: 16px; border-radius: 5px; border: none; width: 80%; max-width: 300px; text-align: center; margin: 5px auto; }
-        button { background: #00b894; color: white; border: none; padding: 12px 20px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; }
-        button:active { background: #55efc4; }
-        .role-seeker { color: #ff4757; font-weight: bold; font-size: 20px; }
-        .role-hider { color: #00b894; font-weight: bold; font-size: 20px; }
+        body, html { margin: 0; padding: 0; height: 100%; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0a0e17; color: #fff; }
+        
+        /* Style inspiré interface tactique gaming */
+        .card {
+            background: #111827;
+            border: 2px solid #1f2937;
+            border-radius: 16px;
+            padding: 25px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            text-align: center;
+        }
+
+        h2 { font-size: 22px; letter-spacing: 1px; margin-bottom: 5px; color: #f3f4f6; }
+        p { color: #9ca3af; font-size: 14px; margin-bottom: 20px; }
+
+        input {
+            width: 100%;
+            padding: 14px;
+            font-size: 16px;
+            background: #030712;
+            border: 1px solid #374151;
+            border-radius: 10px;
+            color: #fff;
+            box-sizing: border-box;
+            margin-bottom: 15px;
+            text-align: center;
+            letter-spacing: 1px;
+        }
+        input:focus { outline: none; border-color: #10b981; }
+
+        .btn-primary {
+            background: #10b981;
+            color: white;
+            border: none;
+            width: 100%;
+            padding: 14px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 10px;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);
+        }
+        .btn-primary:active { transform: scale(0.98); }
+
+        .btn-danger {
+            background: #ef4444;
+            box-shadow: 0 4px 14px rgba(239, 68, 68, 0.4);
+        }
+
+        /* Grille des joueurs façon badges d'équipe */
+        .grid-players {
+            display: flex;
+            justify-content: space-around;
+            margin: 20px 0;
+        }
+        .player-badge {
+            background: #1f2937;
+            border: 2px solid #374151;
+            border-radius: 12px;
+            padding: 12px 8px;
+            width: 28%;
+            text-align: center;
+        }
+        .player-badge.active { border-color: #10b981; background: rgba(16, 185, 129, 0.1); }
+        .player-badge h4 { margin: 0; font-size: 14px; color: #fff; }
+        .player-badge span { font-size: 11px; color: #9ca3af; text-transform: uppercase; }
+
+        #map { height: 65vh; width: 100%; }
+        #ui { padding: 20px; background: #111827; height: 35vh; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; border-top: 2px solid #1f2937; }
     </style>
 </head>
 <body>
 
-    <div id="setup-screen" style="height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #121212;">
-        <h2>CACHE-CACHE GPS REALTIME</h2>
-        <p>Entre ton pseudo et rejoins le même salon que tes potes</p>
-        <input type="text" id="pseudoInput" placeholder="Ton pseudo">
-        <input type="text" id="roomInput" placeholder="Code du salon (ex: SALON123)">
-        <button onclick="joinRoom()">Rejoindre le salon</button>
+    <!-- ÉCRAN DE CONNEXION / SALON -->
+    <div id="setup-screen" style="height: 100vh; display: flex; justify-content: center; align-items: center;">
+        <div class="card">
+            <div style="font-size: 32px; margin-bottom: 10px;">📡</div>
+            <h2>CACHE-CACHE GPS</h2>
+            <p>Rejoins ou crée un salon pour jouer avec ta bande !</p>
+            
+            <input type="text" id="pseudoInput" placeholder="Ton pseudo (ex: Agent 007)">
+            <input type="text" id="roomInput" placeholder="Code du salon (ex: ROOM8535)" value="ROOM8535">
+            
+            <button class="btn-primary" onclick="joinRoom()">Rejoindre le salon</button>
+        </div>
     </div>
 
+    <!-- ÉCRAN DE JEU -->
     <div id="game-screen" style="display:none; height: 100vh;">
         <div id="map"></div>
         <div id="ui">
-            <div id="status">Salon rejoint. En attente des joueurs...</div>
-            <div id="playersConnected" style="font-size: 14px; color: #aaa;">Joueurs connectés : <span id="listNames">...</span></div>
-            <button id="startBtn" onclick="launchGame()" style="background:#ff4757;">Lancer la partie (Tirer au sort)</button>
+            <div>
+                <div id="status" style="font-weight: bold; font-size: 15px; margin-bottom: 10px; color: #10b981;">Salon rejoint. En attente des joueurs...</div>
+                
+                <!-- Blocs visuels de la squad -->
+                <div class="grid-players">
+                    <div class="player-badge active">
+                        <h4 id="slot1">Toi</h4>
+                        <span id="role1">Prêt</span>
+                    </div>
+                    <div class="player-badge">
+                        <h4 id="slot2">Libre</h4>
+                        <span>En attente</span>
+                    </div>
+                    <div class="player-badge">
+                        <h4 id="slot3">Libre</h4>
+                        <span>En attente</span>
+                    </div>
+                </div>
+            </div>
+
+            <button id="startBtn" class="btn-primary btn-danger" onclick="launchGame()">Lancer la partie (Tirer le Chercheur)</button>
         </div>
     </div>
 
@@ -46,11 +136,11 @@
             currentRoom = document.getElementById('roomInput').value.trim();
 
             if (!myPseudo || !currentRoom) {
-                alert("Entre un pseudo et un code de salon !");
+                alert("Entre un pseudo et un code de salon valide !");
                 return;
             }
 
-            // Sauvegarder les joueurs du salon dans le stockage local du navigateur (synchronisation immédiate entre amis sur le même lien)
+            // Gestion locale de la room pour synchroniser les pseudos entre amis sur le même lien
             let salonKey = "cache_room_" + currentRoom;
             let players = JSON.parse(localStorage.getItem(salonKey)) || [];
             
@@ -62,7 +152,11 @@
             document.getElementById('setup-screen').style.display = 'none';
             document.getElementById('game-screen').style.display = 'block';
 
-            document.getElementById('listNames').innerText = players.join(", ");
+            // Mettre à jour l'affichage des blocs de la squad
+            document.getElementById('slot1').innerText = myPseudo;
+            if(players[1]) { document.getElementById('slot2').innerText = players[1]; }
+            if(players[2]) { document.getElementById('slot3').innerText = players[2]; }
+
             initMap();
         }
 
@@ -85,7 +179,7 @@
                         myMarker.setLatLng([lat, lon]);
                     }
                 }, err => {
-                    console.error("Erreur GPS", err);
+                    console.error("GPS Error", err);
                 }, { enableHighAccuracy: true });
             }
         }
@@ -94,23 +188,4 @@
             let salonKey = "cache_room_" + currentRoom;
             let players = JSON.parse(localStorage.getItem(salonKey)) || [myPseudo];
 
-            if (players.length < 1) {
-                players = [myPseudo];
-            }
-
-            // Tirage au sort aléatoire parmi les vrais pseudos saisis dans le salon
-            const randomIndex = Math.floor(Math.random() * players.length);
-            const chosenSeeker = players[randomIndex];
-
-            if (chosenSeeker === myPseudo) {
-                document.getElementById('status').innerHTML = `🎯 RÔLE : <span class="role-seeker">CHERCHEUR</span><br>C'est toi qui dois trouver les autres !`;
-                document.body.style.backgroundColor = "#3b0000";
-            } else {
-                document.getElementById('status').innerHTML = `🏃 RÔLE : <span class="role-hider">CACHÉ</span><br>Le chercheur désigné est : <b>${chosenSeeker}</b>`;
-                document.body.style.backgroundColor = "#003b11";
-            }
-            document.getElementById('startBtn').style.display = 'none';
-        }
-    </script>
-</body>
-</html>
+            // Tirage au sort aléatoire du Chercheur parmi les joueurs inscrits dans le salon
