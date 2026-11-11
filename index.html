@@ -1,564 +1,103 @@
 <!DOCTYPE html>
-<html lang="fr" class="h-full">
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Radar Cache-Cache GPS Multijoueur 60 Min</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Leaflet CSS & JS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-    <!-- Font Awesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-
+    <title>Cache-Cache Urbain GPS</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        body { font-family: 'Inter', sans-serif; }
-        .font-mono-tactical { font-family: 'Share Tech Mono', monospace; }
-        .leaflet-container { background-color: #090d16 !important; }
-
-        /* Ping pulse animation */
-        .ping-pulse {
-            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.8);
-            animation: pulse-red 1.5s infinite;
-        }
-        @keyframes pulse-red {
-            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.8); }
-            70% { box-shadow: 0 0 0 16px rgba(239, 68, 68, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
-        }
+        body, html { margin: 0; padding: 0; height: 100%; font-family: Arial, sans-serif; background: #121212; color: #fff; }
+        #map { height: 70vh; width: 100%; }
+        #ui { padding: 15px; text-align: center; background: #1e1e1e; height: 30vh; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-around; }
+        input { padding: 10px; font-size: 16px; border-radius: 5px; border: none; width: 80%; max-width: 300px; text-align: center; margin: 5px auto; }
+        button { background: #00b894; color: white; border: none; padding: 12px 20px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; }
+        button:active { background: #55efc4; }
+        .role-seeker { color: #ff4757; font-weight: bold; font-size: 20px; }
+        .role-hider { color: #00b894; font-weight: bold; font-size: 20px; }
     </style>
 </head>
-<body class="bg-slate-950 text-slate-100 h-full flex flex-col overflow-hidden select-none">
+<body>
 
-    <!-- MODAL LOBBY / CONNEXION AU SALON -->
-    <div id="lobbyModal" class="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-[3000] flex items-center justify-center p-4">
-        <div class="bg-slate-900 border border-emerald-500/40 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5">
-            <div class="text-center space-y-1">
-                <div class="w-14 h-14 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl flex items-center justify-center mx-auto text-emerald-400 text-2xl mb-2">
-                    <i class="fa-solid fa-satellite-dish animate-pulse"></i>
-                </div>
-                <h2 class="text-2xl font-black text-white font-mono-tactical tracking-wide uppercase">CACHE-CACHE GPS REALTIME</h2>
-                <p class="text-xs text-slate-400">Rejoins ou crée un salon pour jouer avec tes potes dans toute la ville !</p>
-            </div>
+    <div id="setup-screen" style="height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #121212;">
+        <h2>CACHE-CACHE GPS REALTIME</h2>
+        <p>Entre ton pseudo et rejoins le salon de tes potes</p>
+        <input type="text" id="pseudoInput" placeholder="Ton pseudo (ex: Agent 007)">
+        <input type="text" id="roomInput" placeholder="Code du salon (ex: ROOM8535)">
+        <button onclick="joinRoom()">Rejoindre le salon</button>
+    </div>
 
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-xs font-bold text-slate-400 uppercase font-mono-tactical mb-1">Ton Pseudo</label>
-                    <input type="text" id="inputNickname" placeholder="Ex: Agent 007" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 font-bold">
-                </div>
-
-                <div>
-                    <label class="block text-xs font-bold text-slate-400 uppercase font-mono-tactical mb-1">Ton Rôle</label>
-                    <div class="grid grid-cols-2 gap-2">
-                        <button type="button" id="roleBtnHider" onclick="selectRole('hider')" class="py-2.5 px-3 rounded-xl border border-rose-500/50 bg-rose-500/20 text-rose-300 font-bold text-xs flex items-center justify-center gap-2 transition-all">
-                            <i class="fa-solid fa-user-ninja"></i> Caché
-                        </button>
-                        <button type="button" id="roleBtnSeeker" onclick="selectRole('seeker')" class="py-2.5 px-3 rounded-xl border border-slate-800 bg-slate-950 text-slate-400 font-bold text-xs flex items-center justify-center gap-2 transition-all">
-                            <i class="fa-solid fa-crosshairs"></i> Chercheur
-                        </button>
-                    </div>
-                </div>
-
-                <div>
-                    <label class="block text-xs font-bold text-slate-400 uppercase font-mono-tactical mb-1">Code du Salon (Room)</label>
-                    <input type="text" id="inputRoomId" placeholder="Ex: PARIS60M" uppercase class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-emerald-400 font-mono-tactical font-bold tracking-wider focus:outline-none focus:border-emerald-500 uppercase">
-                </div>
-
-                <div class="pt-2 flex flex-col space-y-2">
-                    <button onclick="joinRoom()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-black py-3 rounded-xl transition-all shadow-lg shadow-emerald-600/20 font-mono-tactical text-sm tracking-wider uppercase">
-                        REJOINDRE / CRÉER LE SALON
-                    </button>
-                </div>
-            </div>
+    <div id="game-screen" style="display:none; height: 100vh;">
+        <div id="map"></div>
+        <div id="ui">
+            <div id="status">Salon prêt. En attente du lancement...</div>
+            <div id="playerList"></div>
+            <button id="startBtn" onclick="assignRolesRandomly()" style="background:#ff4757;">Lancer la partie (Tirer le Chercheur au sort)</button>
         </div>
     </div>
 
-    <!-- MAIN APP CONTENT -->
-    <header class="bg-slate-900 border-b border-emerald-500/30 px-4 py-2.5 flex flex-wrap items-center justify-between z-20 shadow-lg">
-        <div class="flex items-center space-x-3">
-            <div class="relative flex items-center justify-center w-10 h-10 rounded-xl bg-slate-950 border border-emerald-500/50 text-emerald-400">
-                <i class="fa-solid fa-radar text-lg animate-spin" style="animation-duration: 8s;"></i>
-            </div>
-            <div>
-                <div class="flex items-center space-x-2">
-                    <h1 class="font-mono-tactical text-base font-bold tracking-wider text-emerald-400 uppercase">GPS RADAR LOBBY</h1>
-                    <span id="roomCodeDisplay" class="bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[10px] font-mono-tactical font-bold px-2 py-0.5 rounded-full uppercase">
-                        ROOM: ---
-                    </span>
-                </div>
-                <p class="text-[11px] text-slate-400 flex items-center gap-1.5">
-                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-                    <span>Fréquence des pings : <strong class="text-white">5 min</strong></span>
-                </p>
-            </div>
-        </div>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        let map, marker;
+        let myPseudo = "";
+        let currentRoom = "";
 
-        <div class="flex items-center space-x-3 my-2 sm:my-0">
-            <!-- CHRONO GLOBAL 60 MIN -->
-            <div class="bg-slate-950 border border-slate-800 px-3.5 py-1.5 rounded-xl flex items-center space-x-3 shadow-inner">
-                <div class="text-right">
-                    <div class="text-[9px] uppercase font-bold text-slate-500 font-mono-tactical">Temps Restant</div>
-                    <div id="gameTimer" class="font-mono-tactical text-xl font-black text-rose-500 tracking-wider">60:00</div>
-                </div>
-            </div>
+        function joinRoom() {
+            myPseudo = document.getElementById('pseudoInput').value.trim();
+            currentRoom = document.getElementById('roomInput').value.trim();
 
-            <!-- PROCHAIN PING -->
-            <div class="bg-slate-950 border border-slate-800 px-3.5 py-1.5 rounded-xl flex items-center space-x-3 shadow-inner hidden sm:flex">
-                <div class="text-right">
-                    <div class="text-[9px] uppercase font-bold text-emerald-500 font-mono-tactical">Prochain Ping</div>
-                    <div id="pingTimer" class="font-mono-tactical text-lg font-bold text-emerald-400">05:00</div>
-                </div>
-            </div>
+            if (!myPseudo || !currentRoom) {
+                alert("Entre un pseudo et un code de salon !");
+                return;
+            }
 
-            <!-- BOUTON COPIER LIEN DE PARTAGE -->
-            <button onclick="copyInviteLink()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3.5 py-2 rounded-xl text-xs transition-all flex items-center gap-2 shadow-md shadow-indigo-600/20 active:scale-95">
-                <i class="fa-solid fa-share-nodes"></i>
-                <span class="hidden sm:inline">Inviter des potes</span>
-            </button>
-        </div>
-    </header>
+            // Basculer l'affichage vers l'écran de jeu
+            document.getElementById('setup-screen').style.display = 'none';
+            document.getElementById('game-screen').style.display = 'block';
 
-    <!-- BARRE DE PROGRESSION PING 5 MIN -->
-    <div class="w-full bg-slate-950 h-1.5 relative overflow-hidden z-20 border-b border-slate-800">
-        <div id="pingProgressBar" class="bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-500 h-full w-full transition-all duration-1000 ease-linear"></div>
-    </div>
-
-    <div class="flex-1 flex flex-col md:flex-row relative overflow-hidden">
-        <!-- MAP CONTAINER -->
-        <div class="flex-1 relative h-full">
-            <div id="map" class="w-full h-full"></div>
-
-            <!-- OVERLAY NOTIFICATION -->
-            <div id="pingNotification" class="hidden absolute top-4 left-1/2 transform -translate-x-1/2 z-[1000] bg-rose-600 text-white px-5 py-2 rounded-2xl shadow-2xl flex items-center space-x-3 border-2 border-rose-400 animate-bounce">
-                <i class="fa-solid fa-satellite text-xl"></i>
-                <div class="font-mono-tactical text-xs">
-                    <span class="font-bold uppercase tracking-wider block text-[10px] text-rose-200">SIGNAL RADAR ÉMIS !</span>
-                    <span>POSITIONS DE TOUS LES CACHÉS MISES À JOUR</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- SIDEBAR JOUEURS -->
-        <aside class="w-full md:w-80 bg-slate-900 border-t md:border-t-0 md:border-l border-slate-800 flex flex-col h-1/2 md:h-full z-10 shadow-2xl">
-            <div class="p-3.5 border-b border-slate-800 bg-slate-950 flex items-center justify-between">
-                <h2 class="text-xs font-bold uppercase tracking-wider text-emerald-400 font-mono-tactical flex items-center gap-2">
-                    <i class="fa-solid fa-users"></i> Joueurs (<span id="playerCount">0</span>)
-                </h2>
-                <span id="userStatusBadge" class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono-tactical">Connecté</span>
-            </div>
-
-            <!-- LISTE EN TEMPS RÉEL -->
-            <div id="playerList" class="flex-1 overflow-y-auto p-3 space-y-2">
-                <!-- Injected via JS -->
-            </div>
-
-            <!-- LOG TACTIQUE -->
-            <div class="p-3 bg-slate-950 border-t border-slate-800 h-32 flex flex-col font-mono-tactical text-[11px]">
-                <div class="text-slate-500 font-bold mb-1 flex items-center justify-between">
-                    <span><i class="fa-solid fa-list-check mr-1"></i> LOG RADAR 5 MIN</span>
-                    <span id="lastPingTime" class="text-emerald-500">Dernier: --:--</span>
-                </div>
-                <div id="pingLog" class="flex-1 overflow-y-auto space-y-1 text-slate-400 pr-1">
-                    <div class="text-slate-600 italic">Connexion au salon Firebase...</div>
-                </div>
-            </div>
-        </aside>
-    </div>
-
-    <!-- SCRIPT FIREBASE COMPAT (CDN MODULES) -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // Global Firebase state & configs
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'hide-and-seek-app';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-            apiKey: "demo-api-key",
-            authDomain: "demo-app.firebaseapp.com",
-            projectId: "demo-app",
-            storageBucket: "demo-app.appspot.com",
-            messagingSenderId: "123456789",
-            appId: "1:123456789:web:abcdef"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-
-        // Application State
-        window.currentRoomId = "";
-        window.currentUser = null;
-        window.myRole = "hider";
-        window.myNickname = "";
-        window.map = null;
-        window.mapMarkers = {};
-        window.playersData = {};
-        window.gameTime = 3600; // 60 minutes
-        window.pingIntervalSeconds = 300; // 5 minutes
-        window.pingTimeRemaining = 300;
-        window.mainTimer = null;
-        window.lastPingTimestamp = 0;
-
-        // Auto detect ?room= in URL
-        window.onload = function() {
             initMap();
-            const urlParams = new URLSearchParams(window.location.search);
-            const roomFromUrl = urlParams.get('room');
-            if (roomFromUrl) {
-                document.getElementById('inputRoomId').value = roomFromUrl.toUpperCase();
-            } else {
-                // Generate default random room
-                document.getElementById('inputRoomId').value = "ROOM" + Math.floor(1000 + Math.random() * 9000);
-            }
-        };
+        }
 
-        // --- MAP INITIALIZATION ---
         function initMap() {
-            window.map = L.map('map', {
-                center: [48.8566, 2.3522],
-                zoom: 14,
-                zoomControl: false
-            });
+            map = L.map('map').setView([46.603354, 1.888334], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '© OpenStreetMap'
+            }).addTo(map);
 
-            L.control.zoom({ position: 'bottomright' }).addTo(window.map);
-
-            // Dark map tiles
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-                attribution: '&copy; OpenStreetMap &copy; CARTO',
-                maxZoom: 19
-            }).addTo(window.map);
+            if (navigator.geolocation) {
+                navigator.geolocation.watchPosition(position => {
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
+                    
+                    if (!marker) {
+                        marker = L.marker([lat, lon]).addTo(map).bindPopup(myPseudo).openPopup();
+                        map.setView([lat, lon], 16);
+                    } else {
+                        marker.setLatLng([lat, lon]);
+                    }
+                }, err => {
+                    console.error("GPS Error", err);
+                }, { enableHighAccuracy: true });
+            }
         }
 
-        // --- ROLE SELECTION ---
-        window.selectRole = function(role) {
-            window.myRole = role;
-            const btnHider = document.getElementById('roleBtnHider');
-            const btnSeeker = document.getElementById('roleBtnSeeker');
+        function assignRolesRandomly() {
+            // Simulation de la liste des joueurs connectés dans le salon
+            const playersInRoom = [myPseudo, "Joueur_Ami_1", "Joueur_Ami_2"]; 
+            
+            // Tirage au sort automatique d'un unique Chercheur
+            const randomIndex = Math.floor(Math.random() * playersInRoom.length);
+            const chosenSeeker = playersInRoom[randomIndex];
 
-            if (role === 'hider') {
-                btnHider.className = "py-2.5 px-3 rounded-xl border border-rose-500/50 bg-rose-500/20 text-rose-300 font-bold text-xs flex items-center justify-center gap-2 transition-all";
-                btnSeeker.className = "py-2.5 px-3 rounded-xl border border-slate-800 bg-slate-950 text-slate-400 font-bold text-xs flex items-center justify-center gap-2 transition-all";
+            if (chosenSeeker === myPseudo) {
+                document.getElementById('status').innerHTML = `🎯 RÔLE : <span class="role-seeker">CHERCHEUR</span><br>C'est toi qui cherches les autres !`;
+                document.body.style.backgroundColor = "#3b0000";
             } else {
-                btnSeeker.className = "py-2.5 px-3 rounded-xl border border-emerald-500/50 bg-emerald-500/20 text-emerald-300 font-bold text-xs flex items-center justify-center gap-2 transition-all";
-                btnHider.className = "py-2.5 px-3 rounded-xl border border-slate-800 bg-slate-950 text-slate-400 font-bold text-xs flex items-center justify-center gap-2 transition-all";
-            }
-        };
-
-        // --- JOIN ROOM & FIREBASE AUTH ---
-        window.joinRoom = async function() {
-            const nickname = document.getElementById('inputNickname').value.trim();
-            const roomId = document.getElementById('inputRoomId').value.trim().toUpperCase();
-
-            if (!nickname) {
-                alert("Veuillez entrer un pseudo !");
-                return;
+                document.getElementById('status').innerHTML = `🏃 RÔLE : <span class="role-hider">CACHÉ</span><br>Le chercheur désigné est : <b>${chosenSeeker}</b>`;
+                document.body.style.backgroundColor = "#003b11";
             }
 
-            if (!roomId) {
-                alert("Veuillez indiquer un code de salon !");
-                return;
-            }
-
-            window.myNickname = nickname;
-            window.currentRoomId = roomId;
-
-            // Authenticate with Firebase
-            try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-                window.currentUser = auth.currentUser;
-            } catch (err) {
-                console.error("Auth error:", err);
-            }
-
-            document.getElementById('lobbyModal').classList.add('hidden');
-            document.getElementById('roomCodeDisplay').textContent = `ROOM: ${window.currentRoomId}`;
-
-            // Update URL without reloading page
-            const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?room=' + window.currentRoomId;
-            window.history.pushState({path:newUrl}, '', newUrl);
-
-            // Listen to Firestore Room Data
-            subscribeToRoom();
-
-            // Start GPS Watch
-            startGpsTracking();
-
-            // Start 60min & 5min timers
-            startTimers();
-        };
-
-        // --- FIRESTORE REALTIME SYNC ---
-        function subscribeToRoom() {
-            if (!window.currentUser) return;
-
-            const roomColRef = collection(db, 'artifacts', appId, 'public', 'data', `room_${window.currentRoomId}`);
-
-            // Listen to all players in the room
-            onSnapshot(roomColRef, (snapshot) => {
-                window.playersData = {};
-                snapshot.forEach(doc => {
-                    window.playersData[doc.id] = doc.data();
-                });
-                renderMapMarkers();
-                renderPlayerList();
-            }, (error) => {
-                console.error("Firestore listener error:", error);
-            });
-        }
-
-        // --- GPS TRACKING ---
-        function startGpsTracking() {
-            if ('geolocation' in navigator) {
-                navigator.geolocation.watchPosition(
-                    (pos) => {
-                        const lat = pos.coords.latitude;
-                        const lng = pos.coords.longitude;
-
-                        // Center map on local player for first time
-                        if (!window.hasCenteredMap) {
-                            window.map.panTo([lat, lng]);
-                            window.hasCenteredMap = true;
-                        }
-
-                        updateMyPositionInFirestore(lat, lng);
-                    },
-                    (err) => {
-                        console.warn("Erreur GPS Réel. Utilisation d'une position par défaut.");
-                        // Fallback Paris coords
-                        updateMyPositionInFirestore(48.8566 + (Math.random()-0.5)*0.005, 2.3522 + (Math.random()-0.5)*0.005);
-                    },
-                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-                );
-            }
-        }
-
-        async function updateMyPositionInFirestore(lat, lng) {
-            if (!window.currentUser || !window.currentRoomId) return;
-
-            const playerDocRef = doc(db, 'artifacts', appId, 'public', 'data', `room_${window.currentRoomId}`, window.currentUser.uid);
-
-            const playerData = {
-                uid: window.currentUser.uid,
-                name: window.myNickname,
-                role: window.myRole,
-                status: 'Alive',
-                lat: lat,
-                lng: lng,
-                lastUpdated: Date.now()
-            };
-
-            try {
-                await setDoc(playerDocRef, playerData, { merge: true });
-            } catch (e) {
-                console.error("Error saving player doc:", e);
-            }
-        }
-
-        // --- RENDER MAP MARKERS & 5 MIN RADAR PING LOGIC ---
-        function renderMapMarkers() {
-            const now = Date.now();
-            const showHidersToSeeker = (now - window.lastPingTimestamp < 15000); // Highlight hiders for 15s after 5-min ping
-
-            // Remove old markers
-            Object.keys(window.mapMarkers).forEach(id => window.map.removeLayer(window.mapMarkers[id]));
-            window.mapMarkers = {};
-
-            Object.values(window.playersData).forEach(p => {
-                const isMe = p.uid === window.currentUser?.uid;
-
-                // Check visibility rules:
-                // Seekers can only see hiders if:
-                // 1) It's the 5-min ping window, OR
-                // 2) The player is Caught, OR
-                // 3) The observer is a Hider watching other players
-                let isVisible = true;
-                if (window.myRole === 'seeker' && p.role === 'hider' && p.status !== 'Caught' && !showHidersToSeeker && !isMe) {
-                    isVisible = false; // Hide hiders from seekers outside of ping window!
-                }
-
-                if (!isVisible) return;
-
-                let markerHtml = '';
-                if (p.role === 'seeker') {
-                    markerHtml = `
-                        <div class="relative flex items-center justify-center">
-                            <div class="w-8 h-8 rounded-full bg-emerald-500 border-2 border-white flex items-center justify-center text-slate-950 font-bold text-xs shadow-lg">
-                                <i class="fa-solid fa-crosshairs"></i>
-                            </div>
-                        </div>`;
-                } else if (p.status === 'Caught') {
-                    markerHtml = `
-                        <div class="w-7 h-7 rounded-full bg-slate-700 border-2 border-slate-500 flex items-center justify-center text-slate-300 text-xs shadow-md opacity-60">
-                            <i class="fa-solid fa-lock"></i>
-                        </div>`;
-                } else {
-                    markerHtml = `
-                        <div class="relative flex items-center justify-center">
-                            <div class="w-7 h-7 rounded-full bg-rose-600 border-2 border-white flex items-center justify-center text-white text-xs font-bold shadow-lg ${showHidersToSeeker ? 'ping-pulse' : ''}">
-                                <i class="fa-solid fa-user-ninja"></i>
-                            </div>
-                        </div>`;
-                }
-
-                const customIcon = L.divIcon({
-                    className: 'custom-gps-icon',
-                    html: markerHtml,
-                    iconSize: [30, 30],
-                    iconAnchor: [15, 15]
-                });
-
-                const marker = L.marker([p.lat, p.lng], { icon: customIcon }).addTo(window.map);
-                marker.bindPopup(`<b>${p.name}</b> (${p.role === 'seeker' ? 'Chercheur' : 'Caché'})<br>Statut: ${p.status}`);
-                window.mapMarkers[p.uid] = marker;
-            });
-        }
-
-        // --- RENDER SIDEBAR PLAYER LIST ---
-        function renderPlayerList() {
-            const list = document.getElementById('playerList');
-            list.innerHTML = '';
-
-            const players = Object.values(window.playersData);
-            document.getElementById('playerCount').textContent = players.length;
-
-            players.forEach(p => {
-                const isMe = p.uid === window.currentUser?.uid;
-                const card = document.createElement('div');
-
-                let badgeBg = "bg-emerald-500/10 text-emerald-400 border-emerald-500/30";
-                if (p.status === 'Caught') badgeBg = "bg-slate-800 text-slate-500 border-slate-700";
-
-                card.className = "bg-slate-950 border border-slate-800 rounded-xl p-2.5 flex items-center justify-between";
-                card.innerHTML = `
-                    <div class="flex items-center space-x-2">
-                        <i class="fa-solid ${p.role === 'seeker' ? 'fa-crosshairs text-emerald-400' : 'fa-user-ninja text-rose-400'}"></i>
-                        <div>
-                            <span class="font-bold text-xs text-white">${p.name} ${isMe ? '(Vous)' : ''}</span>
-                            <div class="text-[9px] text-slate-500 font-mono-tactical">${p.role === 'seeker' ? 'Chercheur' : 'Caché'}</div>
-                        </div>
-                    </div>
-                    <div class="flex items-center space-x-2">
-                        <span class="text-[10px] font-mono-tactical px-2 py-0.5 rounded-full border ${badgeBg}">
-                            ${p.status === 'Caught' ? 'Attrapé' : 'En jeu'}
-                        </span>
-                        ${(window.myRole === 'seeker' && p.role === 'hider' && p.status !== 'Caught') ? `
-                            <button onclick="catchHider('${p.uid}')" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-2 py-1 rounded text-[10px] transition-all">
-                                <i class="fa-solid fa-hand-back-fist"></i>
-                            </button>
-                        ` : ''}
-                    </div>
-                `;
-                list.appendChild(card);
-            });
-        }
-
-        // --- CATCH PLAYER ---
-        window.catchHider = async function(targetUid) {
-            if (!window.currentRoomId) return;
-            const targetDocRef = doc(db, 'artifacts', appId, 'public', 'data', `room_${window.currentRoomId}`, targetUid);
-            try {
-                await updateDoc(targetDocRef, { status: 'Caught' });
-                logTactical(`JOUEUR ATTRAPÉ EN SALON !`);
-            } catch(e) {
-                console.error("Error catching player:", e);
-            }
-        };
-
-        // --- TIMERS & 5 MIN PING LOGIC ---
-        function startTimers() {
-            window.mainTimer = setInterval(() => {
-                window.gameTime--;
-                window.pingTimeRemaining--;
-
-                // Update displays
-                const gMin = Math.floor(window.gameTime / 60);
-                const gSec = window.gameTime % 60;
-                document.getElementById('gameTimer').textContent = `${gMin.toString().padStart(2, '0')}:${gSec.toString().padStart(2, '0')}`;
-
-                const pMin = Math.floor(window.pingTimeRemaining / 60);
-                const pSec = window.pingTimeRemaining % 60;
-                document.getElementById('pingTimer').textContent = `${pMin.toString().padStart(2, '0')}:${pSec.toString().padStart(2, '0')}`;
-
-                const percent = (window.pingTimeRemaining / window.pingIntervalSeconds) * 100;
-                document.getElementById('pingProgressBar').style.width = `${percent}%`;
-
-                // TRIGGER 5 MIN RADAR PING
-                if (window.pingTimeRemaining <= 0) {
-                    window.lastPingTimestamp = Date.now();
-                    window.pingTimeRemaining = window.pingIntervalSeconds;
-
-                    // Play audio beep
-                    playRadarBeep(900, 0.5);
-
-                    // Show notification banner
-                    const notif = document.getElementById('pingNotification');
-                    notif.classList.remove('hidden');
-                    setTimeout(() => notif.classList.add('hidden'), 4000);
-
-                    const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    document.getElementById('lastPingTime').textContent = `Dernier: ${nowStr}`;
-                    logTactical(`SIGNAL RADAR 5 MIN ÉMIS (${nowStr})`);
-
-                    renderMapMarkers();
-                }
-            }, 1000);
-        }
-
-        // --- COPY INVITATION LINK ---
-        window.copyInviteLink = function() {
-            const inviteUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?room=' + window.currentRoomId;
-            const textToCopy = `🚨 Rejoins ma partie de Cache-Cache GPS ! Cliquez sur le lien pour jouer avec moi: ${inviteUrl}`;
-
-            if (navigator.clipboard && window.isSecureContext) {
-                navigator.clipboard.writeText(textToCopy);
-            } else {
-                // Fallback for iframe execution
-                const input = document.createElement('textarea');
-                input.value = textToCopy;
-                document.body.appendChild(input);
-                input.select();
-                document.execCommand('copy');
-                document.body.removeChild(input);
-            }
-
-            alert(`Lien d'invitation copié !\n\nPartage-le à tes potes:\n${inviteUrl}`);
-        };
-
-        // --- AUDIO BEEP ---
-        function playRadarBeep(freq = 880, duration = 0.2) {
-            try {
-                const ctx = new (window.AudioContext || window.webkitAudioContext)();
-                const osc = ctx.createOscillator();
-                const gain = ctx.createGain();
-                osc.type = 'sine';
-                osc.frequency.value = freq;
-                gain.gain.setValueAtTime(0.3, ctx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
-                osc.connect(gain);
-                gain.connect(ctx.destination);
-                osc.start();
-                osc.stop(ctx.currentTime + duration);
-            } catch(e){}
-        }
-
-        function logTactical(msg) {
-            const log = document.getElementById('pingLog');
-            const now = new Date();
-            const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-            const entry = document.createElement('div');
-            entry.className = "text-[10px] border-l-2 border-emerald-500 pl-1.5 py-0.5";
-            entry.innerHTML = `<span class="text-slate-500">[${timeStr}]</span> ${msg}`;
-            log.insertBefore(entry, log.firstChild);
+            document.getElementById('startBtn').style.display = 'none';
         }
     </script>
 </body>
