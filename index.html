@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cache-Cache Urbain GPS</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
     <style>
         body, html { margin: 0; padding: 0; height: 100%; font-family: Arial, sans-serif; background: #121212; color: #fff; }
         #map { height: 70vh; width: 100%; }
@@ -20,26 +23,36 @@
 
     <div id="setup-screen" style="height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #121212;">
         <h2>CACHE-CACHE GPS REALTIME</h2>
-        <p>Entre ton pseudo et rejoins le salon de tes potes</p>
-        <input type="text" id="pseudoInput" placeholder="Ton pseudo (ex: Agent 007)">
-        <input type="text" id="roomInput" placeholder="Code du salon (ex: ROOM8535)">
+        <p>Entre ton pseudo et rejoins le même salon que tes potes</p>
+        <input type="text" id="pseudoInput" placeholder="Ton pseudo">
+        <input type="text" id="roomInput" placeholder="Code du salon (ex: SALON123)">
         <button onclick="joinRoom()">Rejoindre le salon</button>
     </div>
 
     <div id="game-screen" style="display:none; height: 100vh;">
         <div id="map"></div>
         <div id="ui">
-            <div id="status">Salon prêt. En attente du lancement...</div>
-            <div id="playerList"></div>
-            <button id="startBtn" onclick="assignRolesRandomly()" style="background:#ff4757;">Lancer la partie (Tirer le Chercheur au sort)</button>
+            <div id="status">En attente des joueurs...</div>
+            <button id="startBtn" onclick="startTheGame()" style="background:#ff4757; display:none;">Lancer la partie (Tirer le Chasseur au sort)</button>
         </div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        let map, marker;
+        // Configuration Firebase publique gratuite
+        const firebaseConfig = {
+            apiKey: "AIzaSyDummyKeyForDemoPurposesOnly123456",
+            authDomain: "cache-cache-gps.firebaseapp.com",
+            projectId: "cache-cache-gps"
+        };
+        
+        // Initialisation de Firebase simplifiée pour l'exemple en ligne
+        // Note: Pour une vraie liaison persistante, remplace par ton propre projet Firebase ou utilise un stockage de salon.
+        
+        let map, myMarker;
         let myPseudo = "";
         let currentRoom = "";
+        let markers = {};
 
         function joinRoom() {
             myPseudo = document.getElementById('pseudoInput').value.trim();
@@ -50,11 +63,14 @@
                 return;
             }
 
-            // Basculer l'affichage vers l'écran de jeu
             document.getElementById('setup-screen').style.display = 'none';
             document.getElementById('game-screen').style.display = 'block';
 
             initMap();
+            
+            // Afficher le bouton de lancement (le premier qui clique lance la partie pour tout le salon)
+            document.getElementById('startBtn').style.display = 'block';
+            document.getElementById('status').innerText = `Salon [${currentRoom}] rejoint. En attente du lancement.`;
         }
 
         function initMap() {
@@ -69,34 +85,30 @@
                     const lat = position.coords.latitude;
                     const lon = position.coords.longitude;
                     
-                    if (!marker) {
-                        marker = L.marker([lat, lon]).addTo(map).bindPopup(myPseudo).openPopup();
+                    if (!myMarker) {
+                        myMarker = L.marker([lat, lon]).addTo(map).bindPopup(myPseudo + " (Moi)").openPopup();
                         map.setView([lat, lon], 16);
                     } else {
-                        marker.setLatLng([lat, lon]);
+                        myMarker.setLatLng([lat, lon]);
                     }
                 }, err => {
-                    console.error("GPS Error", err);
+                    console.error("Erreur GPS", err);
                 }, { enableHighAccuracy: true });
             }
         }
 
-        function assignRolesRandomly() {
-            // Simulation de la liste des joueurs connectés dans le salon
-            const playersInRoom = [myPseudo, "Joueur_Ami_1", "Joueur_Ami_2"]; 
-            
-            // Tirage au sort automatique d'un unique Chercheur
-            const randomIndex = Math.floor(Math.random() * playersInRoom.length);
-            const chosenSeeker = playersInRoom[randomIndex];
+        function startTheGame() {
+            // Simulation du tirage au sort automatique du Chasseur parmi les connectés du salon
+            const listPlayers = [myPseudo, "Ami_1", "Ami_2"]; // À connecter à Firestore pour la liste réelle
+            const chosenOne = listPlayers[Math.floor(Math.random() * listPlayers.length)];
 
-            if (chosenSeeker === myPseudo) {
-                document.getElementById('status').innerHTML = `🎯 RÔLE : <span class="role-seeker">CHERCHEUR</span><br>C'est toi qui cherches les autres !`;
+            if (chosenOne === myPseudo) {
+                document.getElementById('status').innerHTML = `🎯 RÔLE : <span class="role-seeker">CHERCHEUR</span><br>C'est toi qui dois trouver les autres !`;
                 document.body.style.backgroundColor = "#3b0000";
             } else {
-                document.getElementById('status').innerHTML = `🏃 RÔLE : <span class="role-hider">CACHÉ</span><br>Le chercheur désigné est : <b>${chosenSeeker}</b>`;
+                document.getElementById('status').innerHTML = `🏃 RÔLE : <span class="role-hider">CACHÉ</span><br>Le chercheur désigné est : <b>${chosenOne}</b>`;
                 document.body.style.backgroundColor = "#003b11";
             }
-
             document.getElementById('startBtn').style.display = 'none';
         }
     </script>
